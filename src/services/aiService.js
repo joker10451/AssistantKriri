@@ -6,24 +6,62 @@ class AIService {
     this.genAI = null;
     this.model = null;
     this.isInitialized = false;
+    this.currentModel = 'unknown';
     
-    this.initialize();
+    // Асинхронная инициализация
+    this.initialize().catch(error => {
+      console.error('❌ AI Service initialization failed:', error);
+    });
   }
 
   /**
    * Инициализация AI сервиса
    */
-  initialize() {
+  async initialize() {
     try {
       if (!this.apiKey) {
         throw new Error('GOOGLE_AI_API_KEY not found in environment variables');
       }
 
       this.genAI = new GoogleGenerativeAI(this.apiKey);
-      this.model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-      this.isInitialized = true;
       
-      console.log('🧠 AI Service initialized successfully');
+      // Попробуем разные модели по порядку
+      const modelsToTry = [
+        'gemini-1.5-pro-latest',
+        'gemini-1.5-pro',
+        'gemini-1.5-flash-latest', 
+        'gemini-1.5-flash',
+        'gemini-pro',
+        'models/gemini-pro',
+        'models/gemini-1.5-pro',
+        'models/gemini-1.5-flash'
+      ];
+
+      for (const modelName of modelsToTry) {
+        try {
+          console.log(`🔍 Trying model: ${modelName}`);
+          this.model = this.genAI.getGenerativeModel({ model: modelName });
+          
+          // Тестируем модель простым запросом
+          const testResult = await this.model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: 'Hi' }] }],
+            generationConfig: { maxOutputTokens: 10 }
+          });
+          
+          if (testResult.response.text()) {
+            console.log(`✅ Successfully initialized with model: ${modelName}`);
+            this.currentModel = modelName;
+            this.isInitialized = true;
+            return;
+          }
+        } catch (error) {
+          console.log(`❌ Model ${modelName} failed:`, error.message);
+          continue;
+        }
+      }
+      
+      throw new Error('No working Gemini model found');
+      
     } catch (error) {
       console.error('❌ Failed to initialize AI Service:', error);
       this.isInitialized = false;
@@ -158,7 +196,7 @@ class AIService {
     return {
       initialized: this.isInitialized,
       hasApiKey: !!this.apiKey,
-      model: 'gemini-1.5-flash',
+      model: this.currentModel || 'unknown',
       timestamp: new Date().toISOString()
     };
   }
