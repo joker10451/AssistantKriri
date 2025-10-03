@@ -20,7 +20,7 @@ class AIService {
       }
 
       this.genAI = new GoogleGenerativeAI(this.apiKey);
-      this.model = this.genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+      this.model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
       this.isInitialized = true;
       
       console.log('🧠 AI Service initialized successfully');
@@ -158,7 +158,7 @@ class AIService {
     return {
       initialized: this.isInitialized,
       hasApiKey: !!this.apiKey,
-      model: 'gemini-2.0-flash-exp',
+      model: 'gemini-1.5-flash',
       timestamp: new Date().toISOString()
     };
   }
