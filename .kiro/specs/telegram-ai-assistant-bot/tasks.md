@@ -106,6 +106,8 @@
     - Настроить переменные окружения
     - Добавить скрипты запуска в package.json
     - _Requirements: 3.1, 3.2_
+
+
   
   - [ ] 8.2 Настроить webhook URL
     - Зарегистрировать webhook URL в Telegram Bot API
