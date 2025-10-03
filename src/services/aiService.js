@@ -27,6 +27,7 @@ class AIService {
       
       // Попробуем разные модели по порядку
       const modelsToTry = [
+        'gemini-2.5-flash',
         'gemini-1.5-pro-latest',
         'gemini-1.5-pro',
         'gemini-1.5-flash-latest', 
