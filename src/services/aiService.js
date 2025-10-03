@@ -7,11 +7,23 @@ class AIService {
         this.model = null;
         this.isInitialized = false;
         this.currentModel = 'unknown';
+        this.initPromise = null;
 
-        // Асинхронная инициализация
-        this.initialize().catch(error => {
+        // Запускаем асинхронную инициализацию
+        this.initPromise = this.initialize().catch(error => {
             console.error('❌ AI Service initialization failed:', error);
+            this.isInitialized = false;
         });
+    }
+
+    /**
+     * Ожидание завершения инициализации
+     */
+    async waitForInitialization() {
+        if (this.initPromise) {
+            await this.initPromise;
+        }
+        return this.isInitialized;
     }
 
     /**
@@ -30,13 +42,13 @@ class AIService {
             try {
                 const models = await this.genAI.listModels();
                 console.log('📋 Available models:', models.map(m => m.name));
-                
+
                 // Используем первую доступную модель для генерации контента
-                const availableModels = models.filter(m => 
-                    m.supportedGenerationMethods && 
+                const availableModels = models.filter(m =>
+                    m.supportedGenerationMethods &&
                     m.supportedGenerationMethods.includes('generateContent')
                 );
-                
+
                 if (availableModels.length > 0) {
                     const modelName = availableModels[0].name;
                     console.log(`✅ Using model: ${modelName}`);
@@ -53,7 +65,7 @@ class AIService {
             // Fallback: попробуем стандартные модели
             const modelsToTry = [
                 'gemini-1.5-flash',
-                'gemini-1.5-pro', 
+                'gemini-1.5-pro',
                 'gemini-pro'
             ];
 
@@ -96,6 +108,9 @@ class AIService {
      */
     async generateResponse(prompt, context = []) {
         try {
+            // Ждем завершения инициализации
+            await this.waitForInitialization();
+            
             if (!this.isInitialized) {
                 throw new Error('AI Service not initialized');
             }
@@ -186,6 +201,9 @@ class AIService {
      */
     async isAvailable() {
         try {
+            // Ждем завершения инициализации
+            await this.waitForInitialization();
+            
             if (!this.isInitialized) {
                 return false;
             }
