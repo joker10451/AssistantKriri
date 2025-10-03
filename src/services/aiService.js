@@ -1,223 +1,242 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 class AIService {
-  constructor() {
-    this.apiKey = process.env.GOOGLE_AI_API_KEY;
-    this.genAI = null;
-    this.model = null;
-    this.isInitialized = false;
-    this.currentModel = 'unknown';
-    
-    // Асинхронная инициализация
-    this.initialize().catch(error => {
-      console.error('❌ AI Service initialization failed:', error);
-    });
-  }
+    constructor() {
+        this.apiKey = process.env.GOOGLE_AI_API_KEY;
+        this.genAI = null;
+        this.model = null;
+        this.isInitialized = false;
+        this.currentModel = 'unknown';
 
-  /**
-   * Инициализация AI сервиса
-   */
-  async initialize() {
-    try {
-      if (!this.apiKey) {
-        throw new Error('GOOGLE_AI_API_KEY not found in environment variables');
-      }
+        // Асинхронная инициализация
+        this.initialize().catch(error => {
+            console.error('❌ AI Service initialization failed:', error);
+        });
+    }
 
-      this.genAI = new GoogleGenerativeAI(this.apiKey);
-      
-      // Попробуем разные модели по порядку
-      const modelsToTry = [
-        'gemini-2.5-flash',
-        'gemini-1.5-pro-latest',
-        'gemini-1.5-pro',
-        'gemini-1.5-flash-latest', 
-        'gemini-1.5-flash',
-        'gemini-pro',
-        'models/gemini-pro',
-        'models/gemini-1.5-pro',
-        'models/gemini-1.5-flash'
-      ];
-
-      for (const modelName of modelsToTry) {
+    /**
+     * Инициализация AI сервиса
+     */
+    async initialize() {
         try {
-          console.log(`🔍 Trying model: ${modelName}`);
-          this.model = this.genAI.getGenerativeModel({ model: modelName });
-          
-          // Тестируем модель простым запросом
-          const testResult = await this.model.generateContent({
-            contents: [{ role: 'user', parts: [{ text: 'Hi' }] }],
-            generationConfig: { maxOutputTokens: 10 }
-          });
-          
-          if (testResult.response.text()) {
-            console.log(`✅ Successfully initialized with model: ${modelName}`);
-            this.currentModel = modelName;
-            this.isInitialized = true;
-            return;
-          }
+            if (!this.apiKey) {
+                throw new Error('GOOGLE_AI_API_KEY not found in environment variables');
+            }
+
+            this.genAI = new GoogleGenerativeAI(this.apiKey);
+
+            // Сначала получим список доступных моделей
+            console.log('🔍 Getting available models...');
+            try {
+                const models = await this.genAI.listModels();
+                console.log('📋 Available models:', models.map(m => m.name));
+                
+                // Используем первую доступную модель для генерации контента
+                const availableModels = models.filter(m => 
+                    m.supportedGenerationMethods && 
+                    m.supportedGenerationMethods.includes('generateContent')
+                );
+                
+                if (availableModels.length > 0) {
+                    const modelName = availableModels[0].name;
+                    console.log(`✅ Using model: ${modelName}`);
+                    this.model = this.genAI.getGenerativeModel({ model: modelName });
+                    this.currentModel = modelName;
+                    this.isInitialized = true;
+                    console.log('🧠 AI Service initialized successfully');
+                    return;
+                }
+            } catch (error) {
+                console.log('⚠️ Could not list models, trying fallback models:', error.message);
+            }
+
+            // Fallback: попробуем стандартные модели
+            const modelsToTry = [
+                'gemini-1.5-flash',
+                'gemini-1.5-pro', 
+                'gemini-pro'
+            ];
+
+            for (const modelName of modelsToTry) {
+                try {
+                    console.log(`🔍 Trying model: ${modelName}`);
+                    this.model = this.genAI.getGenerativeModel({ model: modelName });
+
+                    // Тестируем модель простым запросом
+                    const testResult = await this.model.generateContent({
+                        contents: [{ role: 'user', parts: [{ text: 'Hi' }] }],
+                        generationConfig: { maxOutputTokens: 10 }
+                    });
+
+                    if (testResult.response.text()) {
+                        console.log(`✅ Successfully initialized with model: ${modelName}`);
+                        this.currentModel = modelName;
+                        this.isInitialized = true;
+                        return;
+                    }
+                } catch (error) {
+                    console.log(`❌ Model ${modelName} failed:`, error.message);
+                    continue;
+                }
+            }
+
+            throw new Error('No working Gemini model found');
+
         } catch (error) {
-          console.log(`❌ Model ${modelName} failed:`, error.message);
-          continue;
+            console.error('❌ Failed to initialize AI Service:', error);
+            this.isInitialized = false;
         }
-      }
-      
-      throw new Error('No working Gemini model found');
-      
-    } catch (error) {
-      console.error('❌ Failed to initialize AI Service:', error);
-      this.isInitialized = false;
-    }
-  }
-
-  /**
-   * Генерация ответа от ИИ
-   * @param {string} prompt - Запрос пользователя
-   * @param {Array} context - Контекст разговора (опционально)
-   * @returns {Promise<string>} - Ответ от ИИ
-   */
-  async generateResponse(prompt, context = []) {
-    try {
-      if (!this.isInitialized) {
-        throw new Error('AI Service not initialized');
-      }
-
-      if (!prompt || typeof prompt !== 'string') {
-        throw new Error('Invalid prompt provided');
-      }
-
-      console.log('🤔 Generating AI response for prompt:', prompt.substring(0, 100) + '...');
-
-      // Подготовка контекста для модели
-      let fullPrompt = prompt;
-      
-      if (context && context.length > 0) {
-        const contextString = this.formatContext(context);
-        fullPrompt = `${contextString}\n\nПользователь: ${prompt}`;
-      }
-
-      // Настройки генерации
-      const generationConfig = {
-        temperature: 0.7,
-        topK: 40,
-        topP: 0.95,
-        maxOutputTokens: 1024,
-      };
-
-      // Генерация ответа
-      const result = await this.model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
-        generationConfig,
-      });
-
-      const response = await result.response;
-      const text = response.text();
-
-      if (!text) {
-        throw new Error('Empty response from AI model');
-      }
-
-      console.log('✅ AI response generated successfully:', {
-        promptLength: prompt.length,
-        responseLength: text.length,
-        hasContext: context.length > 0
-      });
-
-      return text;
-
-    } catch (error) {
-      console.error('❌ Error generating AI response:', error);
-      
-      // Обработка различных типов ошибок
-      if (error.message.includes('quota') || error.message.includes('limit')) {
-        throw new Error('AI_QUOTA_EXCEEDED');
-      } else if (error.message.includes('API key')) {
-        throw new Error('AI_INVALID_KEY');
-      } else if (error.message.includes('network') || error.message.includes('timeout')) {
-        throw new Error('AI_NETWORK_ERROR');
-      } else {
-        throw new Error('AI_GENERAL_ERROR');
-      }
-    }
-  }
-
-  /**
-   * Форматирование контекста для модели
-   * @param {Array} context - Массив сообщений контекста
-   * @returns {string} - Отформатированный контекст
-   */
-  formatContext(context) {
-    if (!context || context.length === 0) {
-      return '';
     }
 
-    const contextMessages = context
-      .slice(-10) // Берем последние 10 сообщений
-      .map(msg => {
-        const role = msg.role === 'user' ? 'Пользователь' : 'Ассистент';
-        return `${role}: ${msg.content}`;
-      })
-      .join('\n');
+    /**
+     * Генерация ответа от ИИ
+     * @param {string} prompt - Запрос пользователя
+     * @param {Array} context - Контекст разговора (опционально)
+     * @returns {Promise<string>} - Ответ от ИИ
+     */
+    async generateResponse(prompt, context = []) {
+        try {
+            if (!this.isInitialized) {
+                throw new Error('AI Service not initialized');
+            }
 
-    return `Контекст разговора:\n${contextMessages}\n`;
-  }
+            if (!prompt || typeof prompt !== 'string') {
+                throw new Error('Invalid prompt provided');
+            }
 
-  /**
-   * Проверка доступности AI сервиса
-   * @returns {Promise<boolean>} - Доступность сервиса
-   */
-  async isAvailable() {
-    try {
-      if (!this.isInitialized) {
-        return false;
-      }
+            console.log('🤔 Generating AI response for prompt:', prompt.substring(0, 100) + '...');
 
-      // Простой тест запрос для проверки доступности
-      const testResult = await this.model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: 'Привет' }] }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 10,
-        },
-      });
+            // Подготовка контекста для модели
+            let fullPrompt = prompt;
 
-      const response = await testResult.response;
-      return !!response.text();
+            if (context && context.length > 0) {
+                const contextString = this.formatContext(context);
+                fullPrompt = `${contextString}\n\nПользователь: ${prompt}`;
+            }
 
-    } catch (error) {
-      console.error('⚠️ AI Service availability check failed:', error);
-      return false;
+            // Настройки генерации
+            const generationConfig = {
+                temperature: 0.7,
+                topK: 40,
+                topP: 0.95,
+                maxOutputTokens: 1024,
+            };
+
+            // Генерация ответа
+            const result = await this.model.generateContent({
+                contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
+                generationConfig,
+            });
+
+            const response = await result.response;
+            const text = response.text();
+
+            if (!text) {
+                throw new Error('Empty response from AI model');
+            }
+
+            console.log('✅ AI response generated successfully:', {
+                promptLength: prompt.length,
+                responseLength: text.length,
+                hasContext: context.length > 0
+            });
+
+            return text;
+
+        } catch (error) {
+            console.error('❌ Error generating AI response:', error);
+
+            // Обработка различных типов ошибок
+            if (error.message.includes('quota') || error.message.includes('limit')) {
+                throw new Error('AI_QUOTA_EXCEEDED');
+            } else if (error.message.includes('API key')) {
+                throw new Error('AI_INVALID_KEY');
+            } else if (error.message.includes('network') || error.message.includes('timeout')) {
+                throw new Error('AI_NETWORK_ERROR');
+            } else {
+                throw new Error('AI_GENERAL_ERROR');
+            }
+        }
     }
-  }
 
-  /**
-   * Получение статуса AI сервиса
-   * @returns {Object} - Информация о статусе
-   */
-  getStatus() {
-    return {
-      initialized: this.isInitialized,
-      hasApiKey: !!this.apiKey,
-      model: this.currentModel || 'unknown',
-      timestamp: new Date().toISOString()
-    };
-  }
+    /**
+     * Форматирование контекста для модели
+     * @param {Array} context - Массив сообщений контекста
+     * @returns {string} - Отформатированный контекст
+     */
+    formatContext(context) {
+        if (!context || context.length === 0) {
+            return '';
+        }
 
-  /**
-   * Получение fallback сообщения при недоступности AI
-   * @param {string} errorType - Тип ошибки
-   * @returns {string} - Сообщение для пользователя
-   */
-  getFallbackMessage(errorType) {
-    const messages = {
-      'AI_QUOTA_EXCEEDED': '⏳ Превышен лимит запросов к ИИ. Попробуйте позже.',
-      'AI_INVALID_KEY': '🔑 Проблема с ключом доступа к ИИ. Обратитесь к администратору.',
-      'AI_NETWORK_ERROR': '🌐 Проблема с сетью. Попробуйте еще раз через несколько секунд.',
-      'AI_GENERAL_ERROR': '🤖 Временная проблема с ИИ сервисом. Попробуйте позже.',
-      'default': '😔 Извините, ИИ временно недоступен. Попробуйте позже.'
-    };
+        const contextMessages = context
+            .slice(-10) // Берем последние 10 сообщений
+            .map(msg => {
+                const role = msg.role === 'user' ? 'Пользователь' : 'Ассистент';
+                return `${role}: ${msg.content}`;
+            })
+            .join('\n');
 
-    return messages[errorType] || messages['default'];
-  }
+        return `Контекст разговора:\n${contextMessages}\n`;
+    }
+
+    /**
+     * Проверка доступности AI сервиса
+     * @returns {Promise<boolean>} - Доступность сервиса
+     */
+    async isAvailable() {
+        try {
+            if (!this.isInitialized) {
+                return false;
+            }
+
+            // Простой тест запрос для проверки доступности
+            const testResult = await this.model.generateContent({
+                contents: [{ role: 'user', parts: [{ text: 'Привет' }] }],
+                generationConfig: {
+                    temperature: 0.1,
+                    maxOutputTokens: 10,
+                },
+            });
+
+            const response = await testResult.response;
+            return !!response.text();
+
+        } catch (error) {
+            console.error('⚠️ AI Service availability check failed:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Получение статуса AI сервиса
+     * @returns {Object} - Информация о статусе
+     */
+    getStatus() {
+        return {
+            initialized: this.isInitialized,
+            hasApiKey: !!this.apiKey,
+            model: this.currentModel || 'unknown',
+            timestamp: new Date().toISOString()
+        };
+    }
+
+    /**
+     * Получение fallback сообщения при недоступности AI
+     * @param {string} errorType - Тип ошибки
+     * @returns {string} - Сообщение для пользователя
+     */
+    getFallbackMessage(errorType) {
+        const messages = {
+            'AI_QUOTA_EXCEEDED': '⏳ Превышен лимит запросов к ИИ. Попробуйте позже.',
+            'AI_INVALID_KEY': '🔑 Проблема с ключом доступа к ИИ. Обратитесь к администратору.',
+            'AI_NETWORK_ERROR': '🌐 Проблема с сетью. Попробуйте еще раз через несколько секунд.',
+            'AI_GENERAL_ERROR': '🤖 Временная проблема с ИИ сервисом. Попробуйте позже.',
+            'default': '😔 Извините, ИИ временно недоступен. Попробуйте позже.'
+        };
+
+        return messages[errorType] || messages['default'];
+    }
 }
 
 module.exports = AIService;
