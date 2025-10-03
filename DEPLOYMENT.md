@@ -1,17 +1,44 @@
-# Развертывание на Railway
+# Развертывание бота
 
-## Шаги для развертывания:
+## Варианты бесплатного хостинга
 
-### 1. Подготовка
-1. Зарегистрируйтесь на [Railway.app](https://railway.app)
-2. Подключите ваш GitHub аккаунт
-3. Репозиторий: https://github.com/joker10451/AssistantKriri.git
+## Вариант 1: Render.com (Рекомендуется)
 
-### 2. Создание проекта на Railway
-1. Нажмите "New Project"
-2. Выберите "Deploy from GitHub repo"
-3. Выберите ваш репозиторий
-4. Railway автоматически определит Node.js проект
+### Шаги для развертывания:
+
+1. **Регистрация**
+   - Перейдите на [Render.com](https://render.com)
+   - Зарегистрируйтесь через GitHub
+
+2. **Создание Web Service**
+   - Нажмите "New +" → "Web Service"
+   - Подключите репозиторий: https://github.com/joker10451/AssistantKriri.git
+   - Настройки:
+     - **Name**: assistant-kriri
+     - **Runtime**: Node
+     - **Build Command**: `npm install`
+     - **Start Command**: `npm start`
+
+## Вариант 2: Vercel (Serverless)
+
+1. **Регистрация**
+   - Перейдите на [Vercel.com](https://vercel.com)
+   - Войдите через GitHub
+
+2. **Развертывание**
+   - Нажмите "New Project"
+   - Импортируйте репозиторий
+   - Vercel автоматически развернет проект
+
+## Вариант 3: Glitch.com
+
+1. **Регистрация**
+   - Перейдите на [Glitch.com](https://glitch.com)
+   - Войдите через GitHub
+
+2. **Импорт проекта**
+   - Нажмите "New Project" → "Import from GitHub"
+   - Вставьте URL репозитория
 
 ### 3. Настройка переменных окружения
 В разделе Variables добавьте:
